@@ -1,21 +1,53 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { User, Mail, FileText, Save } from "lucide-react";
+import supabase from "../../utils/supabase";
+import type { Claims } from "../../types/user";
 
 export default function ProfileSetup() {
   const navigate = useNavigate();
+  const [claims, setClaims] = useState<Claims>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     bio: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would save the profile data
-    console.log("Profile setup completed:", formData);
-    // Redirect to profile page after setup
-    navigate("/profile");
+    console.log(formData);
+    // 검증
+    if (!formData?.name || !formData?.email || !formData?.bio) {
+      alert("값을 입력해주세요");
+      return;
+    }
+    if (!claims) {
+      alert("claims 값이 올바르지 않습니다.");
+      return;
+    }
+
+    try {
+      // API DOCS
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          email: formData.email,
+          display_name: formData.name,
+          bio: formData.bio,
+        })
+        .eq("id", claims.sub)
+        // (중요) 정보를 업데이트 할 때는 eq 메서드를 빼고 하면 안 됨, 실제 사용시 몇백명의 정보를 다루게 되면 크리티컬한 낭비
+        .select();
+
+      if (error) throw error;
+      if (data) {
+        alert("회원가입이 완료되었습니다.");
+        navigate("/blog");
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleInputChange = (
@@ -27,6 +59,47 @@ export default function ProfileSetup() {
       [name]: value,
     }));
   };
+
+  // 사용자 기본 정보 불러오기 코드
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase.auth.getClaims();
+        if (error) throw error;
+        const claims = data?.claims as Claims; //타입단언, 불러와야 딤 (.d.ts 인디;;)
+        setClaims(claims);
+
+        // 모든 데이터 조회하는 것
+        // profiles 데이터를 모두 조회
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("*")
+          // 선택 데이터 조회
+          .eq("id", claims?.sub || "")
+          .single();
+
+        if (profilesError) throw profilesError;
+
+        if (profiles.bio) {
+          navigate("/blog");
+        }
+
+        setFormData({
+          name: profiles?.display_name || "",
+          email: profiles?.email || "",
+          bio: profiles.bio || "",
+        });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [navigate]);
+
+  if (isLoading) return null;
 
   return (
     <div className="max-w-md mx-auto">

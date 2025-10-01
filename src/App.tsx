@@ -6,20 +6,8 @@ import BlogDetail from "./pages/blog/BlogDetail";
 import Profile from "./pages/profile/Profile";
 import BlogCreate from "./pages/blog/BlogCreate";
 import ProfileSetup from "./pages/auth/ProfileSetup";
-import { useEffect, useState } from "react";
-import supabase from "./utils/supabase";
 
 export default function App() {
-  const [todos, setTodos] = useState([]);
-
-  useEffect(() => {
-    async function getTodos() {
-      const { data: todos } = await supabase.from("todos").select();
-      console.log(todos);
-    }
-    getTodos();
-  }, []);
-
   return (
     <>
       <Routes>

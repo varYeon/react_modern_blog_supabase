@@ -1,46 +1,73 @@
-import { useParams, Link } from "react-router";
+import { useParams, Link, useNavigate } from "react-router";
 import { Calendar, Tag, ArrowLeft, Edit, Delete, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { Database } from "../../types/database";
+import supabase from "../../utils/supabase";
+import BlogDetailSkeleton from "../../components/loading/BlogDetailSkeleton";
 // import BlogDetailSkeleton from "../../components/loading/BlogDetailSkeleton";
 
+type Post = Database["public"]["Tables"]["posts"]["Row"];
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+type PostWithProfile = Post & {
+  profile: Profile;
+};
+
 export default function BlogDetail() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [post, setPost] = useState<PostWithProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock post data - in real app, this would come from API
-  const post = {
-    id: parseInt(id || "1"),
-    title: "Building Modern React Applications",
-    content: `
-      <p>React has revolutionized the way we build user interfaces, and with the constant evolution of the ecosystem, staying up-to-date with best practices is crucial for building scalable and maintainable applications.</p>
-      
-      <h2>Getting Started with Modern React</h2>
-      <p>Modern React development involves several key concepts and tools that have become standard in the industry. From hooks to context, from TypeScript integration to state management patterns, there's a lot to consider when architecting a new React application.</p>
-      
-      <h2>Key Principles</h2>
-      <p>When building React applications, it's important to follow certain principles that will make your code more maintainable and your applications more performant. These include component composition, proper state management, and thinking in React.</p>
-      
-      <h2>Best Practices</h2>
-      <p>Some of the most important best practices include using TypeScript for better developer experience, implementing proper error boundaries, optimizing performance with React.memo and useMemo, and following consistent naming conventions.</p>
-      
-      <p>By following these guidelines and staying current with React's evolution, you'll be well-equipped to build robust applications that can scale with your needs.</p>
-    `,
-    date: "2024-01-15",
-    category: "Development",
-    author: "John Doe",
-    readTime: "5 min read",
-    image:
-      "https://images.pexels.com/photos/11035380/pexels-photo-11035380.jpeg?auto=compress&cs=tinysrgb&w=800&h=400&fit=crop",
-    color: "from-blue-500 to-purple-600",
+  const handleDelete = async () => {
+    try {
+      const { error } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", Number(id));
+      if (error) throw error;
+      navigate("/");
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleDelete = () => {
-    // Handle post deletion logic here
-    console.log("Deleting post:", post?.id);
-    setShowDeleteModal(false);
-    // In real app, redirect to blog list after deletion
-    // navigate('/blog');
-  };
+  if (isLoading) return <BlogDetailSkeleton />;
+
+  useEffect(() => {
+    const fetchPost = async () => {
+      setIsLoading(true);
+      try {
+        // 게시글 정보
+        const { data: posts, error } = await supabase
+          .from("posts")
+          .select(
+            `
+            *,
+            profile:profiles (id, display_name, avatar_url, bio, email, created_at)
+          `
+          )
+          .eq("id", Number(id))
+          .single();
+        if (error) throw error;
+        setPost(posts);
+
+        // // 작성자 정보
+        // const { data: profile } = await supabase
+        //   .from("profiles")
+        //   .select("*")
+        //   .eq("id", posts.profile_id)
+        //   .single();
+
+        // console.log(profile);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPost();
+  }, [id]);
 
   return (
     <div>
@@ -59,11 +86,11 @@ export default function BlogDetail() {
         <header className="mb-8">
           <div className="relative overflow-hidden rounded-lg mb-6">
             <div
-              className={`absolute inset-0 bg-gradient-to-br ${post.color} opacity-90`}
+              className={`absolute inset-0 bg-gradient-to-br opacity-90`}
             ></div>
             <img
-              src={post.image}
-              alt={post.title}
+              src={post?.thumbnail}
+              alt={post?.title}
               className="w-full h-64 md:h-80 object-cover"
             />
             <div className="absolute inset-0 bg-black opacity-20"></div>
@@ -72,7 +99,7 @@ export default function BlogDetail() {
           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-4">
             <div className="flex items-center">
               <Calendar size={14} className="mr-1" />
-              {new Date(post.date).toLocaleDateString("en-US", {
+              {new Date(post?.created_at || "").toLocaleDateString("en-US", {
                 month: "long",
                 day: "numeric",
                 year: "numeric",
@@ -80,20 +107,20 @@ export default function BlogDetail() {
             </div>
             <div className="flex items-center">
               <Tag size={14} className="mr-1" />
-              {post.category}
+              {post?.category}
             </div>
-            <span>{post.readTime}</span>
-            <span>by {post.author}</span>
+            <span>0 min read</span>
+            <span>by {post?.profile.display_name}</span>
           </div>
 
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-            {post.title}
+            {post?.title}
           </h1>
 
           <div className="flex items-center justify-between border-b border-gray-200 pb-6">
             <div className="flex items-center space-x-4">
               <Link
-                to={`/edit/${post.id}`}
+                to={`/edit/${post?.id}`}
                 className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <Edit size={16} className="mr-2" />
@@ -112,15 +139,15 @@ export default function BlogDetail() {
 
         <div
           className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{ __html: post?.content as string }}
         />
 
         <footer className="mt-12 pt-8 border-t border-gray-200">
           <div className="bg-gray-50 rounded-lg p-6">
             <div className="flex items-start space-x-4">
               <img
-                src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=80&h=80&fit=crop"
-                alt={post.author}
+                src={post?.profile.avatar_url || undefined}
+                alt={post?.profile?.display_name || undefined}
                 className="w-16 h-16 rounded-full object-cover"
               />
               <div className="flex-1">
@@ -128,14 +155,23 @@ export default function BlogDetail() {
                   About the Author
                 </h3>
                 <p className="text-gray-600 mb-2">
-                  <strong>{post.author}</strong> is a frontend developer with
-                  over 8 years of experience building web applications. He
-                  specializes in React, TypeScript, and modern web technologies.
+                  <strong>{post?.profile?.display_name}</strong> is a frontend
+                  developer
                 </p>
+                <p className="text-gray-600 mb-2">{post?.profile?.bio}</p>
                 <div className="flex space-x-4 text-sm text-gray-500">
-                  <span>15 articles published</span>
+                  <span>0 articles published</span>
                   <span>•</span>
-                  <span>Joined March 2023</span>
+                  <span>
+                    Joined{" "}
+                    {new Date(
+                      post?.profile.created_at || ""
+                    ).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
                 </div>
               </div>
             </div>

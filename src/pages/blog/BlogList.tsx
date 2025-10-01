@@ -1,15 +1,15 @@
 import { Calendar, Tag } from "lucide-react";
-import { Link } from "react-router";
-import type { Database } from "../../types/database";
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import supabase from "../../utils/supabase";
+import type { Database } from "../../types/database";
 import BlogListSkeleton from "../../components/loading/BlogListSkeleton";
-// import BlogListSkeleton from "../../components/loading/BlogListSkeleton";
 
 type Post = Database["public"]["Tables"]["posts"]["Row"];
 export default function BlogList() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
     const getPosts = async () => {
       setIsLoading(true);
@@ -24,6 +24,26 @@ export default function BlogList() {
       }
     };
     getPosts();
+
+    //구독
+    const channel = supabase
+      .channel("posts")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "posts",
+        },
+        (payload) => {
+          console.log(payload);
+        }
+      )
+      .subscribe((status) => console.log(status));
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
@@ -73,7 +93,6 @@ export default function BlogList() {
                           {post.category}
                         </div>
                       </div>
-
                       <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-3 group-hover:text-gray-700 transition-colors">
                         {post.title}
                       </h2>
